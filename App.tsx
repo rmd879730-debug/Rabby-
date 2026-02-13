@@ -32,7 +32,19 @@ const App: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const headImageRef = useRef<HTMLImageElement | null>(null);
   const nextDirection = useRef<Direction>(INITIAL_DIRECTION);
+
+  // Initialize the head image
+  useEffect(() => {
+    const img = new Image();
+    // Using a reliable crop from a known source for Mirza Fakhrul.
+    img.src = 'https://i.ibb.co/LhyYv3G/mirza-fakhrul.jpg'; 
+    
+    img.onload = () => {
+      headImageRef.current = img;
+    };
+  }, []);
 
   const generateFood = useCallback((currentSnake: Position[]): Position => {
     let newFood: Position;
@@ -116,7 +128,7 @@ const App: React.FC = () => {
     if (score > 0 && score % 5 === 0) {
       fetchAiTip(score, snake.length);
     }
-  }, [score, fetchAiTip]);
+  }, [score, fetchAiTip, snake.length]);
 
   const moveSnake = useCallback(() => {
     if (isGameOver || isPaused || !gameStarted) return;
@@ -194,107 +206,135 @@ const App: React.FC = () => {
     ctx.fill();
 
     snake.forEach((part, index) => {
-      ctx.shadowBlur = index === 0 ? 15 : 0;
-      ctx.shadowColor = COLORS.SNAKE_HEAD;
-      ctx.fillStyle = index === 0 ? COLORS.SNAKE_HEAD : COLORS.SNAKE_BODY;
-      const padding = 1;
-      ctx.fillRect(part.x * GRID_SIZE + padding, part.y * GRID_SIZE + padding, GRID_SIZE - padding * 2, GRID_SIZE - padding * 2);
+      const isHead = index === 0;
+      
+      if (isHead && headImageRef.current) {
+        ctx.save();
+        const centerX = part.x * GRID_SIZE + GRID_SIZE / 2;
+        const centerY = part.y * GRID_SIZE + GRID_SIZE / 2;
+        ctx.translate(centerX, centerY);
+        
+        // Rotate head based on direction
+        let angle = 0;
+        if (direction === Direction.RIGHT) angle = Math.PI / 2;
+        else if (direction === Direction.DOWN) angle = Math.PI;
+        else if (direction === Direction.LEFT) angle = -Math.PI / 2;
+        ctx.rotate(angle);
+
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = COLORS.SNAKE_HEAD;
+        
+        // Draw the image centered
+        ctx.drawImage(
+          headImageRef.current, 
+          -GRID_SIZE / 2 - 2, 
+          -GRID_SIZE / 2 - 2, 
+          GRID_SIZE + 4, 
+          GRID_SIZE + 4
+        );
+        ctx.restore();
+      } else {
+        ctx.shadowBlur = isHead ? 15 : 0;
+        ctx.shadowColor = COLORS.SNAKE_HEAD;
+        // Fix: Use COLORS.SNAKE_HEAD instead of non-existent COLORS.SNAKE
+        ctx.fillStyle = isHead ? COLORS.SNAKE_HEAD : COLORS.SNAKE_BODY;
+        ctx.fillRect(part.x * GRID_SIZE + 1, part.y * GRID_SIZE + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+      }
     });
-    ctx.shadowBlur = 0;
-  }, [snake, food]);
+
+  }, [snake, food, direction]);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-50">
-      <ScoreBoard score={score} highScore={highScore} isMuted={isMuted} onToggleMute={toggleMute} />
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30">
+      <ScoreBoard 
+        score={score} 
+        highScore={highScore} 
+        isMuted={isMuted} 
+        onToggleMute={toggleMute} 
+      />
 
-      <main className="flex-1 flex flex-col md:flex-row items-center justify-center gap-8 p-4 md:p-8 overflow-hidden">
-        <div className="hidden lg:flex flex-col gap-6 w-full max-w-xs h-full justify-center">
-          <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl flex flex-col gap-4">
-            <h2 className="text-xl font-bold flex items-center gap-2 uppercase tracking-tighter">
-              <Keyboard className="text-emerald-400" size={18} /> Terminal
-            </h2>
-            <ul className="text-xs text-slate-400 space-y-3 font-mono">
-              <li className="flex justify-between border-b border-slate-800/50 pb-1"><span>MOVE</span> <span className="text-emerald-400">ARROWS</span></li>
-              <li className="flex justify-between border-b border-slate-800/50 pb-1"><span>PAUSE</span> <span className="text-emerald-400">SPACE</span></li>
-              <li className="flex justify-between"><span>VOLUME</span> <span className="text-emerald-400">CLICK_ICON</span></li>
-            </ul>
-          </div>
-          <AICoach tip={aiTip} isLoading={isAiLoading} />
-        </div>
-
+      <main className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-12 p-8 max-w-7xl mx-auto w-full">
         <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-emerald-600 to-rose-600 rounded-lg blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
-          <canvas
-            ref={canvasRef}
-            width={CANVAS_SIZE}
-            height={CANVAS_SIZE}
-            className="relative bg-slate-950 border-2 border-slate-800 rounded-lg shadow-2xl block max-w-full h-auto"
-          />
+          {/* Decorative border */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-rose-500 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+          
+          <div className="relative bg-slate-950 rounded-lg overflow-hidden border border-slate-800 shadow-2xl">
+            <canvas
+              ref={canvasRef}
+              width={CANVAS_SIZE}
+              height={CANVAS_SIZE}
+              className="max-w-full h-auto block"
+            />
 
-          {!gameStarted && (
-            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-10 p-8 text-center">
-              <h1 className="text-6xl font-black mb-4 bg-gradient-to-br from-emerald-400 to-emerald-600 bg-clip-text text-transparent italic tracking-tighter">NEON SNAKE</h1>
-              <p className="text-slate-400 mb-8 max-w-xs text-sm">Neural link established. Ready for simulation?</p>
-              <button 
-                onClick={resetGame}
-                className="flex items-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-8 py-4 rounded-full transition-all hover:scale-105 active:scale-95 shadow-xl shadow-emerald-500/20 uppercase tracking-widest"
-              >
-                <Play fill="currentColor" size={20} /> Initialize
-              </button>
-            </div>
-          )}
-
-          {isGameOver && (
-            <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center rounded-lg z-10 p-4 animate-in fade-in zoom-in duration-300">
-              <div className="mb-4 text-rose-500">
-                <Trophy size={64} className="animate-bounce" />
+            {(!gameStarted || isGameOver) && (
+              <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-300">
+                {isGameOver ? (
+                  <>
+                    <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center text-rose-500 mb-4 animate-bounce">
+                      <Trophy size={32} />
+                    </div>
+                    <h2 className="text-4xl font-black text-white mb-2 tracking-tight">GAME OVER</h2>
+                    <p className="text-slate-400 mb-8 max-w-xs">You achieved a score of {score}. Not bad, but you can do better!</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mb-4">
+                      <Play size={32} />
+                    </div>
+                    <h1 className="text-4xl font-black text-white mb-2 tracking-tight">POLITICAL SNAKE</h1>
+                    <p className="text-slate-400 mb-8 max-w-xs">Guide the leader through the grid. Eat the red orbs to grow and increase your score.</p>
+                  </>
+                )}
+                
+                <button
+                  onClick={resetGame}
+                  className="group relative px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl transition-all hover:scale-105 flex items-center gap-3 overflow-hidden shadow-lg shadow-emerald-500/20"
+                >
+                  {isGameOver ? <RotateCcw size={20} /> : <Play size={20} />}
+                  <span>{isGameOver ? 'TRY AGAIN' : 'START REVOLUTION'}</span>
+                </button>
               </div>
-              <h2 className="text-4xl font-bold mb-2 tracking-tighter">SYSTEM OVERLOAD</h2>
-              <p className="text-slate-400 mb-8 font-mono text-sm">SEQUENCE_END // SCORE: {score}</p>
-              <button 
-                onClick={resetGame}
-                className="flex items-center gap-3 bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold px-8 py-4 rounded-full transition-all hover:scale-105 active:scale-95 shadow-xl shadow-rose-500/20 uppercase tracking-widest"
-              >
-                <RotateCcw size={20} /> Retry Boot
-              </button>
-            </div>
-          )}
+            )}
 
-          {isPaused && !isGameOver && (
-            <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-10">
-              <div className="bg-slate-900 border border-slate-800 px-8 py-4 rounded-2xl flex flex-col items-center shadow-2xl scale-110">
-                <Pause size={48} className="text-emerald-400 mb-2" />
-                <h3 className="text-xl font-bold uppercase tracking-widest text-emerald-400">Simulation Paused</h3>
-                <p className="text-[10px] text-slate-500 mt-2 font-mono">SPACE TO RESUME</p>
+            {isPaused && !isGameOver && (
+              <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] flex flex-col items-center justify-center">
+                <div className="bg-slate-900 border border-slate-800 px-8 py-4 rounded-2xl flex items-center gap-4 shadow-2xl animate-in zoom-in duration-200">
+                  <Pause className="text-emerald-400 animate-pulse" />
+                  <span className="text-2xl font-bold tracking-widest text-white">PAUSED</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        <div className="flex lg:hidden flex-col gap-4 w-full">
-           <AICoach tip={aiTip} isLoading={isAiLoading} />
-           <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => { setIsPaused(!isPaused); audio.setPaused(!isPaused); }} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-center text-emerald-400">
-                {isPaused ? <Play size={24} /> : <Pause size={24} />}
-              </button>
-              <button onClick={resetGame} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-center text-rose-400">
-                <RotateCcw size={24} />
-              </button>
-           </div>
+        <div className="flex flex-col gap-8 w-full max-w-xs">
+          <AICoach tip={aiTip} isLoading={isAiLoading} />
+          
+          <div className="p-6 bg-slate-900/50 border border-slate-800/50 rounded-2xl space-y-4">
+            <div className="flex items-center gap-2 text-slate-400">
+              <Keyboard size={18} />
+              <h4 className="text-xs font-bold uppercase tracking-widest">Controls</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-medium">
+              <div className="bg-slate-800 p-2 rounded-lg flex justify-between items-center">
+                <span className="text-slate-500 uppercase">Move</span>
+                <span className="text-emerald-400">Arrows</span>
+              </div>
+              <div className="bg-slate-800 p-2 rounded-lg flex justify-between items-center">
+                <span className="text-slate-500 uppercase">Pause</span>
+                <span className="text-emerald-400">Space</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between px-2 text-slate-600">
+            <a href="#" className="hover:text-emerald-400 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest">
+              <Github size={14} /> Repository
+            </a>
+            <span className="text-[10px] uppercase font-bold tracking-widest opacity-50">V1.2.0-PRO</span>
+          </div>
         </div>
       </main>
-
-      <footer className="w-full py-3 px-8 border-t border-slate-900/50 flex justify-between items-center text-[10px] text-slate-600 font-mono tracking-tighter bg-slate-950">
-        <div className="flex gap-4">
-          <span>S_RATE: 44.1KHZ</span>
-          <span>AUDIO_SYNC: OK</span>
-          <span>SNAKE_V3_STABLE</span>
-        </div>
-        <div className="flex items-center gap-2">
-           <Github size={12} />
-           <span>SOURCE://NEON-SNAKE.IO</span>
-        </div>
-      </footer>
     </div>
   );
 };
